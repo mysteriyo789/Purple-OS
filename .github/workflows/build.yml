@@ -8,19 +8,20 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Build Tools
+      - name: Install Live Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools libarchive-tools
+          sudo apt-get install -y live-build debootstrap squashfs-tools
 
-      - name: Execute Build Script
+      - name: Run Build
         run: |
           chmod +x scripts/build_purple.sh
           sudo ./scripts/build_purple.sh
 
-      - name: Upload Finished ISO
+      - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
-          name: PurpleOS-Build
-          path: output/PurpleOS.iso
+          name: PurpleOS-Image
+          # Live-build generates a file ending in .hybrid.iso
+          path: "*.iso"
           if-no-files-found: error
