@@ -1,40 +1,40 @@
 #!/bin/bash
 set -e
 
-# 1. Setup Workspace
-mkdir -p work/rootfs output
-ROOT=$(pwd)/work/rootfs
-export DEBIAN_FRONTEND=noninteractive
+# 1. Initialize Live Build
+mkdir -p build && cd build
+lb config --apt-indices false \
+          --architectures amd64 \
+          --bootstrap-keyring ubuntu-keyring \
+          --archive-areas "main restricted universe multiverse" \
+          --debian-installer false \
+          --iso-publisher "PurpleOS; http://github.com/mysteriyo789"
 
-# 2. Base System
-echo "--- Stage 1: Base System ---"
-sudo debootstrap --arch amd64 jammy "$ROOT" http://archive.ubuntu.com/ubuntu/
+# 2. Add the Desktop and Apps
+# This tells the builder exactly what to put in the ISO
+mkdir -p config/package-lists
+cat <<EOF > config/package-lists/desktop.list.chroot
+sddm
+kde-plasma-desktop
+vlc
+vivaldi-standalone
+network-manager
+plasma-nm
+EOF
 
-# 3. Fixing Network for Chroot
-sudo cp /etc/resolv.conf "$ROOT"/etc/resolv.conf
-
-# 4. Force Installation of KDE and Apps
-echo "--- Stage 2: Heavy Installation ---"
-# We run these as individual commands so we can see exactly where it stops
-sudo chroot "$ROOT" apt-get update
-sudo chroot "$ROOT" apt-get install -y sddm kde-plasma-desktop vlc vivaldi-standalone flatpak plasma-nm network-manager
-
-# --- THE CHECK ---
-# If this folder doesn't exist, the desktop didn't install.
-if [ ! -d "$ROOT/usr/share/plasma" ]; then
-  echo "ERROR: Desktop files not found. Installation failed."
-  exit 1
-fi
-
-# 5. Apply Aesthetics
-echo "--- Stage 3: Aesthetics ---"
-sudo mkdir -p "$ROOT/etc/skel/.config"
-sudo bash -c "cat <<EOT > $ROOT/etc/skel/.config/kdeglobals
+# 3. Apply the Space Black & Amethyst Theme
+mkdir -p config/includes.chroot/etc/skel/.config
+cat <<EOF > config/includes.chroot/etc/skel/.config/kdeglobals
 [General]
 ColorScheme=BreezeDark
 AccentColor=103,58,183
-EOT"
+EOF
 
-# 6. Compressing (The "Wait" Stage)
-echo "--- Stage 4: High Compression ---"
-sudo mksquashfs "$ROOT" output/PurpleOS.iso -comp xz
+# 4. Start the Build
+echo "--- Starting the Full OS Build ---"
+sudo lb build
+
+# 5. Move the result to the main folder
+mv *.iso ../PurpleOS.iso
+cd ..
+echo "Build Complete!"
