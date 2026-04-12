@@ -1,0 +1,26 @@
+name: Build Purple OS
+on: [workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools libarchive-tools
+
+      - name: Execute Build Script
+        run: |
+          chmod +x scripts/build_purple.sh
+          sudo ./scripts/build_purple.sh
+
+      - name: Upload Finished ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: PurpleOS-Build
+          path: output/PurpleOS.iso
+          if-no-files-found: error
