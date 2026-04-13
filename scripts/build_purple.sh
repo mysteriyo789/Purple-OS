@@ -4,6 +4,9 @@ set -e
 # 1. Initialize
 mkdir -p build && cd build
 
+# Clean up any failed previous diversions that break the build
+if [ -f config/hooks/001-fix-diversion.chroot ]; then rm config/hooks/001-fix-diversion.chroot; fi
+
 lb config --apt-indices false \
           --architectures amd64 \
           --distribution jammy \
@@ -34,15 +37,24 @@ ColorScheme=BreezeDark
 AccentColor=103,58,183
 EOF
 
-# 4. Start the Build
+# 4. THE FIX: Force the start-stop-daemon to reset if it hangs
+mkdir -p config/hooks
+cat <<EOF > config/hooks/999-fix-dpkg-divert.chroot
+#!/bin/sh
+if dpkg-divert --list | grep -q "/usr/sbin/start-stop-daemon"; then
+    dpkg-divert --remove --rename /usr/sbin/start-stop-daemon || true
+fi
+EOF
+chmod +x config/hooks/999-fix-dpkg-divert.chroot
+
+# 5. Start the Build
 echo "--- Starting the Full OS Build ---"
 sudo lb build
 
-# 5. Move the result
+# 6. Move the result
 if [ -f *.iso ]; then
     mv *.iso ../PurpleOS.iso
 else
-    # Fallback if name is different
     mv live-image-amd64.hybrid.iso ../PurpleOS.iso || true
 fi
 
