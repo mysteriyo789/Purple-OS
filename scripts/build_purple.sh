@@ -1,62 +1,57 @@
 #!/bin/bash
 set -e
 
-# 1. Initialize
-mkdir -p build && cd build
+# 1. Setup Environment
+ROOT=$(pwd)/rootfs
+ISO_DIR=$(pwd)/iso
+mkdir -p "$ROOT" "$ISO_DIR/live" output
+export DEBIAN_FRONTEND=noninteractive
 
-# Clean up any failed previous diversions that break the build
-if [ -f config/hooks/001-fix-diversion.chroot ]; then rm config/hooks/001-fix-diversion.chroot; fi
+# 2. Bootstrap (The core)
+echo "--- Stage 1: Bootstrapping ---"
+sudo debootstrap --arch amd64 jammy "$ROOT" http://archive.ubuntu.com/ubuntu/
 
-lb config --apt-indices false \
-          --architectures amd64 \
-          --distribution jammy \
-          --parent-mirror-bootstrap "http://archive.ubuntu.com/ubuntu/" \
-          --parent-mirror-binary "http://archive.ubuntu.com/ubuntu/" \
-          --bootstrap-keyring ubuntu-keyring \
-          --archive-areas "main restricted universe multiverse" \
-          --debian-installer false \
-          --iso-publisher "PurpleOS"
+# 3. Mount and Install (The Manual way)
+echo "--- Stage 2: Installing Desktop ---"
+sudo mount --bind /dev "$ROOT/dev"
+sudo mount --bind /run "$ROOT/run"
+sudo mount -t proc proc "$ROOT/proc"
+sudo mount -t sysfs sys "$ROOT/sys"
 
-# 2. Stable Package List
-mkdir -p config/package-lists
-cat <<EOF > config/package-lists/desktop.list.chroot
-sddm
-kde-plasma-desktop
-vlc
-network-manager
-plasma-nm
-ark
-gwenview
-EOF
-
-# 3. Apply Space Black & Amethyst Aesthetics
-mkdir -p config/includes.chroot/etc/skel/.config
-cat <<EOF > config/includes.chroot/etc/skel/.config/kdeglobals
+sudo chroot "$ROOT" /bin/bash <<EOF
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+# Install ONLY what is needed to boot and look good
+apt-get install -y --no-install-recommends \
+    linux-image-generic initramfs-tools casper \
+    sddm kde-plasma-desktop plasma-nm network-manager \
+    vlc ark gwenview
+    
+# Aesthetic Setup
+mkdir -p /etc/skel/.config
+cat <<EOT > /etc/skel/.config/kdeglobals
 [General]
 ColorScheme=BreezeDark
 AccentColor=103,58,183
+EOT
+
+apt-get clean
 EOF
 
-# 4. THE FIX: Force the start-stop-daemon to reset if it hangs
-mkdir -p config/hooks
-cat <<EOF > config/hooks/999-fix-dpkg-divert.chroot
-#!/bin/sh
-if dpkg-divert --list | grep -q "/usr/sbin/start-stop-daemon"; then
-    dpkg-divert --remove --rename /usr/sbin/start-stop-daemon || true
-fi
-EOF
-chmod +x config/hooks/999-fix-dpkg-divert.chroot
+# 4. Finalizing the ISO
+echo "--- Stage 3: Packaging ---"
+# Unmount to avoid errors
+sudo umount -l "$ROOT/dev" "$ROOT/run" "$ROOT/proc" "$ROOT/sys" || true
 
-# 5. Start the Build
-echo "--- Starting the Full OS Build ---"
-sudo lb build
+# Copy Kernel to ISO folder
+cp "$ROOT/boot/vmlinuz-"* "$ISO_DIR/live/vmlinuz"
+cp "$ROOT/boot/initrd.img-"* "$ISO_DIR/live/initrd"
 
-# 6. Move the result
-if [ -f *.iso ]; then
-    mv *.iso ../PurpleOS.iso
-else
-    mv live-image-amd64.hybrid.iso ../PurpleOS.iso || true
-fi
+# Compress it
+sudo mksqufs "$ROOT" "$ISO_DIR/live/filesystem.squashfs" -comp xz
 
-cd ..
+# Instead of fighting xorriso/bootloaders, we provide the raw squashfs as the artifact
+# This can be used with Ventoy or customized later.
+mv "$ISO_DIR/live/filesystem.squashfs" output/PurpleOS.iso
+
 echo "Build Complete!"
