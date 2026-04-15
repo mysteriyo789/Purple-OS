@@ -4,14 +4,10 @@ on: [workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # Give it an hour just in case
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Install Live Build Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y live-build debootstrap squashfs-tools
 
       - name: Run Build
         run: |
@@ -22,6 +18,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PurpleOS-Image
-          # Live-build generates a file ending in .hybrid.iso
-          path: "*.iso"
+          # This is the fix: look inside the output folder
+          path: output/PurpleOS.iso
           if-no-files-found: error
