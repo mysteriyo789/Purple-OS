@@ -20,28 +20,19 @@ sudo mount -t sysfs sys "$ROOT/sys"
 
 sudo chroot "$ROOT" /bin/bash <<EOF
 export DEBIAN_FRONTEND=noninteractive
-
-# FORCE ENABLE REPOSITORIES (The Fix for 'Package not found')
 printf "deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse\n" > /etc/apt/sources.list
 printf "deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse\n" >> /etc/apt/sources.list
-printf "deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse\n" >> /etc/apt/sources.list
-
 apt-get update
-
-# Install Kernel and Desktop (This will take 15-30 mins)
 apt-get install -y --no-install-recommends \
     linux-image-generic initramfs-tools casper \
     sddm kde-plasma-desktop plasma-nm network-manager \
     vlc ark gwenview
-
-# Aesthetic Setup
 mkdir -p /etc/skel/.config
 cat <<EOT > /etc/skel/.config/kdeglobals
 [General]
 ColorScheme=BreezeDark
 AccentColor=103,58,183
 EOT
-
 apt-get clean
 EOF
 
@@ -49,14 +40,11 @@ EOF
 echo "--- Stage 3: Packaging ---"
 sudo umount -l "$ROOT/dev" "$ROOT/run" "$ROOT/proc" "$ROOT/sys" || true
 
-# Copy Kernel files (Robust matching)
-KERNEL_IMG=\$(ls "$ROOT/boot/vmlinuz-"* | head -n 1)
-INITRD_IMG=\$(ls "$ROOT/boot/initrd.img-"* | head -n 1)
+# Robust copying without complex syntax
+sudo cp "$ROOT"/boot/vmlinuz-*-generic "$ISO_DIR/live/vmlinuz"
+sudo cp "$ROOT"/boot/initrd.img-*-generic "$ISO_DIR/live/initrd"
 
-cp "\$KERNEL_IMG" "$ISO_DIR/live/vmlinuz"
-cp "\$INITRD_IMG" "$ISO_DIR/live/initrd"
-
-# Fixed: mksquashfs command
+# Final Compression
 sudo mksquashfs "$ROOT" output/PurpleOS.iso -comp xz
 
-echo "Build Complete!"
+echo "Build Complete! Check the output folder."
