@@ -4,10 +4,15 @@ on: [workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Give it an hour just in case
+    timeout-minutes: 60
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap squashfs-tools
 
       - name: Run Build
         run: |
@@ -18,6 +23,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PurpleOS-Image
-          # This is the fix: look inside the output folder
           path: output/PurpleOS.iso
           if-no-files-found: error
